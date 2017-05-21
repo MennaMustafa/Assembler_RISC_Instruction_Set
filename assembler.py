@@ -69,11 +69,12 @@ def bindigits(n, bits):
     return ("{0:0>%s}" % (bits)).format(s)
 
 #Check Register number in range
-def CheckRegister(R):
-    if int(R) >7:
-        return False
-    else:
-        return True
+# def CheckRegister(R):
+#     print R
+#     if int(R) >7:
+#         return False
+#     else:
+#         return True
 
 #Split instruction
 def  SplitInstruction(instruction,NumberOfOperands):
@@ -100,8 +101,8 @@ def ReadFile(FilePath):
         if " " in instructions[i]:
             s_index = instructions[i].index(' ')
             instructions[i] = instructions[i][0:s_index + 1] + instructions[i][s_index + 1:].replace(" ", "")
-        if "#" in instructions[i]:
-            index = instructions[i].index("#")
+        if ";" in instructions[i]:
+            index = instructions[i].index(";")
             instructions[i] = instructions[i][0:index-1]
         i += 1
     return instructions
@@ -109,9 +110,13 @@ def ReadFile(FilePath):
 ############################ Write to file #####################################################3
 
 def WriteToFile(Filepath,Instructions): ###A function that takes a file path and list of instructions(0's and 1's) and write to file
+    # o = open(Filepath, 'w')
+    # for item in Instructions:
+    #     print>> o, item
     o = open(Filepath, 'w')
-    for item in Instructions:
-        print>> o, item
+    print >> o, "// format=mti addressradix=d dataradix=b version=1.0 wordsperline=1\n"
+    for index, item in enumerate(Instructions):
+        print>> o, str(index) + ": " + item
 
 ############################### Build list that will be written to file use the help of other functions ###
 
@@ -181,22 +186,19 @@ def BuildConvertedList(Instructions):
 def Memory(instruction,type):
     RegisterNumber = ""
     operands = SplitInstruction(instruction,2) #Operands = [operation, register number, EA]
-    # Check that register number is in range
-    if not CheckRegister(operands[1][1:]):
-        return -2 #Register value out of range
+
+    RegisterNumber = BinaryEquiv(int(operands[1][1:]),3)
+
+    ### Handle EA according to range
+    EA = ""
+    if len(bin(int(operands[2])).zfill(10)) == 11:
+        EA = bin(int(operands[2])).zfill(10).replace('b', '')
+    elif len(bin(int(operands[2])).zfill(10)) == 12:
+        EA = bin(int(operands[2])).zfill(10)[2:]
     else:
-        RegisterNumber = BinaryEquiv(int(operands[1][1:]),3)
+        EA = bin(int(operands[2])).zfill(10).replace('b', '0')
 
-        ### Handle EA according to range
-        EA = ""
-        if len(bin(int(operands[2])).zfill(10)) == 11:
-            EA = bin(int(operands[2])).zfill(10).replace('b', '')
-        elif len(bin(int(operands[2])).zfill(10)) == 12:
-            EA = bin(int(operands[2])).zfill(10)[2:]
-        else:
-            EA = bin(int(operands[2])).zfill(10).replace('b', '0')
-
-        Rdst = BinaryEquiv(int(operands[1][1:]),4)
+    Rdst = BinaryEquiv(int(operands[1][1:]),4)
     if type == 0: #LDD r0 , 3
         return "0"+Rdst+EA+"0"
     elif type == 1:#STD R2, 3
@@ -211,25 +213,21 @@ def ImmediateValue(instruction,type):
     operands = SplitInstruction(instruction,2) #operands = [operation, reg number, imm]
     RegisterNumber = ""
     Imm = ""
-    # Check that register number is in range
-    if not CheckRegister(operands[1][1:]):
-        return -2 #Register value out of range
+    RegisterNumber = bin(int(operands[1][1:])).zfill(4).replace('b', '')
+    if len(bin(int(operands[2]))) > 16:
+        return -1  # Value out of range
     else:
-        RegisterNumber = bin(int(operands[1][1:])).zfill(4).replace('b', '')
-        if len(bin(int(operands[2]))) > 16:
-            return -1  # Value out of range
-        else:
-            Imm = bin(int(operands[2])).zfill(16).replace('b', '0')
+        Imm = bin(int(operands[2])).zfill(16).replace('b', '0')
 
 
     Rdst = BinaryEquiv(int(operands[1][1:]),4)
     returned = "1" + Rdst + "000000100"
     if type == 0:
-        return [returned+"00",Imm]
+        return returned+"00",Imm
     elif type == 1:
-        return [returned+"01",Imm]
+        return returned+"01",Imm
     elif type == 2:
-        return returned+"10",[Imm]
+        return returned+"10",Imm
 
 #################### Three Operand Instruction ################################################
 # Add -> type: 0 --- "1" + '"00 000"
@@ -248,21 +246,18 @@ def ThreeOperand(instruction,type,opcode):
         Rdst = operands[3][1:]
         Rsrc1 = operands[1][1:]
         Rsrc2 = operands[2][1:]
-        if not CheckRegister(operands[1][1:]) and CheckRegister(operands[2][1:]) and CheckRegister(operands[3][1:]):
-            return -2
-        else:
-            Rsrc1 = BinaryEquiv(int(Rsrc1),3)
-            Rsrc2 = BinaryEquiv(int(Rsrc2),3)
-            Rdst = BinaryEquiv(int(Rdst),4)
+
+
+        Rsrc1 = BinaryEquiv(int(Rsrc1),3)
+        Rsrc2 = BinaryEquiv(int(Rsrc2),3)
+        Rdst = BinaryEquiv(int(Rdst),4)
 
     elif type ==4:
         operands = instruction.split()  # operands = [operation , rdst]
-        if not CheckRegister(operands[1][1:]):
-            return -2
-        else:
-            Rsrc1 = "111"
-            Rsrc2 = "110"
-            Rdst = BinaryEquiv(int(operands[1][1:]),4)
+
+        Rsrc1 = "111"
+        Rsrc2 = "110"
+        Rdst = BinaryEquiv(int(operands[1][1:]),4)
 
     return "1"+Rdst+Rsrc1+Rsrc2+opcode
 
@@ -276,11 +271,10 @@ def MovAndOneOperand (instruction,type,opcode): #Mov Rsrc1, Rdst ; #Not Rdst; ds
         operands = SplitInstruction(instruction, 2)  # operands = [operation,rsrc1,rdst]
         Rdst = operands[2][1:]
         Rsrc1 = operands[1][1:]
-        if not CheckRegister(Rdst) and CheckRegister(operands[2][1:]):
-            return -2
-        else:
-            Rsrc1 = BinaryEquiv(int(Rsrc1),3)
-            Rdst = BinaryEquiv(int(Rdst),4)
+
+
+        Rsrc1 = BinaryEquiv(int(Rsrc1),3)
+        Rdst = BinaryEquiv(int(Rdst),4)
 
         return "1" + Rdst + Rsrc1 + opcode
 
@@ -288,11 +282,9 @@ def MovAndOneOperand (instruction,type,opcode): #Mov Rsrc1, Rdst ; #Not Rdst; ds
         operands = instruction.split()  # operands = [operation ,rdst]
 
         Rdst = operands[1][1:]
-        if not CheckRegister(Rdst):
-            return -2
-        else:
-            Rdst2 = BinaryEquiv(int(Rdst),3)
-            Rdst1 = BinaryEquiv(int(Rdst),4)
+
+        Rdst2 = BinaryEquiv(int(Rdst),3)
+        Rdst1 = BinaryEquiv(int(Rdst),4)
 
         return "1" + Rdst1 + Rdst2 + opcode
 
@@ -305,10 +297,7 @@ def Jump(instruction,type,opcode):
     operands = instruction.split() # operands = [ operation, Rdst ]
 
     Rdst = operands[1][1:]
-    if not CheckRegister(Rdst):
-        return -2
-    else:
-        Rdst = BinaryEquiv(int(Rdst),4)
+    Rdst = BinaryEquiv(int(Rdst),4)
 
     return "1" + Rdst + opcode
 
@@ -320,31 +309,27 @@ def IN_OUT_PUSH_POP(instruction,type,opcode):
     Rdst = operands[1][1:]
 
     if type == 0 or type ==3: #IN = 0 , #POP = 3
-        if not CheckRegister(Rdst):
-            return -2
-        else:
-            Rdst = BinaryEquiv(int(Rdst),4)
+
+        Rdst = BinaryEquiv(int(Rdst),4)
         return "1" + Rdst + "000" +opcode
 
     elif type == 1 or type == 2: #OUT=1, #PUSH=2
-        if not CheckRegister(Rdst):
-            return -2
-        else:
-            Rdst = BinaryEquiv(int(Rdst), 3)
+        Rdst = BinaryEquiv(int(Rdst), 3)
         return "10000"+Rdst+opcode
 
 ############################################# ###############################################
 ##################### Test code ####################################
-i = ReadFile('T.txt')
+i = ReadFile('testCase.txt')
+print i
 converted = BuildConvertedList(i)
-compare = ['1000000000010000','0000000000000000','1000100000010000','0000000000010101','1001000000010000','0000000000011001',
-           '1010000000010000','0000000000001100','1010100000010000','0000000000001111','0000000000000111','1001100000011110',
-           '1001101101100010','1000100000011011','0000000000000110','1001100000000000','0000000000000111','1010000000011000',
-           '1001011111000100','1010100000011000','0000010000000111','1001101100001001','1000000011010100','0000001000000111']
-WriteToFile("output.txt",converted)
+print converted
+# # compare = ['1000000000010000','0000000000000000','1000100000010000','0000000000010101','1001000000010000','0000000000011001',
+# #            '1010000000010000','0000000000001100','1010100000010000','0000000000001111','0000000000000111','1001100000011110',
+# #            '1001101101100010','1000100000011011','0000000000000110','1001100000000000','0000000000000111','1010000000011000',
+# #            '1001011111000100','1010100000011000','0000010000000111','1001101100001001','1000000011010100','0000001000000111']
+WriteToFile("testCase.mem",converted)
 
-if len(compare) == len([i for i, j in zip(converted[2:], compare) if i == j]):
-    print True
+
 
 
 
